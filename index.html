@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-Hant"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>省時記帳</title>
+<style>
+:root{--bg:#f6f5f2;--card:#fff;--ink:#222;--mute:#888;--acc:#3b6ef5;--g:#2bb673;--r:#e5533d;--line:#e6e6e6}
+*{box-sizing:border-box}body{margin:0;font-family:-apple-system,"PingFang TC","Noto Sans TC",sans-serif;background:var(--bg);color:var(--ink)}
+button{font:inherit;cursor:pointer}.hide{display:none!important}
+.wrap{max-width:520px;margin:0 auto;padding:16px}
+h1{font-size:22px;margin:8px 0 4px}h2{font-size:17px;margin:0 0 8px}.sub{color:var(--mute);font-size:14px;margin:0 0 16px}
+.card{background:var(--card);border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px #0001}
+label{display:block;font-size:13px;color:var(--mute);margin:10px 0 6px}
+input{width:100%;padding:11px;border:1px solid #ddd;border-radius:10px;font-size:16px;background:#fff}
+.seg{display:flex;gap:8px;flex-wrap:wrap}.seg button{flex:1;min-width:120px;padding:11px;border-radius:10px;border:2px solid #ddd;background:#fff}
+.seg button.sel{border-color:var(--acc);background:#eef2ff}
+.time{display:flex;gap:8px;align-items:center}.time input{text-align:center}.time span{color:var(--mute);font-size:13px;white-space:nowrap}
+.tabs{display:flex;background:#e9e8e4;border-radius:12px;padding:4px;margin-bottom:12px}.tabs button{flex:1;border:none;background:none;padding:10px;border-radius:9px}
+.tabs button.sel{background:#fff;box-shadow:0 1px 3px #0002;font-weight:600}
+.primary{width:100%;padding:14px;border:none;border-radius:12px;background:var(--acc);color:#fff;font-size:16px;margin-top:6px}
+.ghost{border:none;background:var(--card);border-radius:10px;padding:8px 12px;box-shadow:0 1px 3px #0001}
+.err{color:var(--r);font-size:13px;margin-top:8px}
+header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.nav{border:none;background:var(--card);border-radius:10px;width:40px;height:40px;font-size:18px;box-shadow:0 1px 3px #0001}
+.sum{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}
+.sum div{background:var(--card);border-radius:12px;padding:10px;box-shadow:0 1px 3px #0001}.sum b{display:block;font-size:16px;margin-top:2px}.sum span{font-size:12px;color:var(--mute)}
+.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+.dow{text-align:center;font-size:12px;color:var(--mute);padding:4px 0}
+.day{background:var(--card);border-radius:10px;min-height:62px;padding:5px;border:2px solid transparent;box-shadow:0 1px 3px #0001;text-align:left;overflow:hidden}
+.day.empty{background:transparent;box-shadow:none}.day.today{border-color:var(--acc)}.day.off{background:#f0efeb}
+.day .n{font-size:13px;font-weight:600}.day .v{font-size:10px;margin-top:3px;line-height:1.3}
+.pos{color:var(--g)}.neg{color:var(--r)}
+.modal{position:fixed;inset:0;background:#0006;display:none;align-items:flex-end;justify-content:center;z-index:9}
+.modal.on{display:flex}.sheet{background:var(--bg);width:100%;max-width:520px;border-radius:18px 18px 0 0;padding:16px;max-height:92vh;overflow:auto}
+@media(min-width:600px){.modal{align-items:center}.sheet{border-radius:18px}}
+.close{float:right;border:none;background:none;font-size:24px;color:var(--mute)}
+.cmp{font-size:13px;margin-top:8px;color:var(--mute)}
+</style></head><body>
+
+<!-- 設定首頁 -->
+<div id="setup" class="wrap hide">
+ <h1>歡迎使用省時記帳</h1><p class="sub">先填好你平日的固定消費和用時，之後每天的紀錄都會跟這裡比較。</p>
+ <div class="card"><h2>個人資料</h2>
+  <label>姓名</label><input id="pName" placeholder="你的名字">
+  <label>年齡</label><input id="pAge" type="number" inputmode="numeric" min="1" placeholder="例如 30">
+ </div>
+ <div class="tabs" id="setTabs"><button data-t="work" class="sel">上班日</button><button data-t="off">下班日</button></div>
+ <div id="setForm"></div>
+ <div class="err" id="setErr"></div>
+ <button class="primary" id="setSave">保存設定</button>
+</div>
+
+<!-- 月曆 -->
+<div id="main" class="wrap hide">
+ <header><div><div class="sub" style="margin:0" id="hello"></div></div><button class="ghost" id="editSet">⚙️ 固定設定</button></header>
+ <header style="margin-top:10px"><button class="nav" id="prev">‹</button><h1 id="title" style="margin:0"></h1><button class="nav" id="next">›</button></header>
+ <div class="sum"><div><span>本月比平時多花</span><b id="sMoney">$0</b></div><div><span>本月省下時間</span><b id="sTime">0:00</b></div><div><span>每省 1 小時花費</span><b id="sRate">–</b></div></div>
+ <div class="grid" id="grid"></div>
+ <p class="sub" style="margin-top:12px">綠色是省下的時間，紅色是比平時多花的錢。灰底是下班日。</p>
+</div>
+
+<!-- 每日輸入 -->
+<div class="modal" id="modal"><div class="sheet">
+ <button class="close" id="close">×</button><h2 id="mTitle"></h2>
+ <div class="tabs" id="dayTabs"><button data-t="work">上班日</button><button data-t="off">下班日</button></div>
+ <div id="dayForm"></div>
+ <div class="err" id="dayErr"></div>
+ <button class="primary" id="daySave">儲存這一天</button>
+ <button class="ghost" id="dayClear" style="width:100%;margin-top:8px;color:var(--r)">清除這天紀錄</button>
+</div></div>
+
+<script>
+const K='timesaver-v2';let S=JSON.parse(localStorage.getItem(K)||'null')||{profile:null,base:null,days:{}};
+const persist=()=>localStorage.setItem(K,JSON.stringify(S));
+const ITEMS={work:[['go','上班通勤',1],['back','下班通勤',1],['dinner','晚餐',0]],off:[['go','出門交通',1],['back','回家交通',1],['dinner','晚餐',0]]};
+const MODES=['公共交通','計程車或Uber'];
+const $=id=>document.getElementById(id);
+const fm=m=>{const s=m<0?'-':'';m=Math.abs(Math.round(m));return `${s}${Math.floor(m/60)}:${String(m%60).padStart(2,'0')}`};
+const money=v=>(v<0?'-':'')+'$'+Math.abs(Math.round(v*10)/10).toLocaleString();
+
+function formHTML(pref,type,vals){
+ return ITEMS[type].map(([k,lab,isT])=>{const v=(vals&&vals[k])||{};return `<div class="card"><h2>${lab}</h2>
+ ${isT?`<label>交通方式</label><div class="seg" data-f="${pref}${k}mode">${MODES.map(x=>`<button type="button" data-v="${x}" class="${v.mode==x?'sel':''}">${x}</button>`).join('')}</div>`:''}
+ <label>${isT?'消費（港元）':'外食/外賣消費（平均，港元）'}</label><input id="${pref}${k}amt" type="number" inputmode="decimal" min="0" step="0.1" value="${v.amt??''}" placeholder="例如 ${isT?'12':'80'}">
+ <label>所花時間</label><div class="time"><input id="${pref}${k}h" type="number" inputmode="numeric" min="0" value="${v.min!=null?Math.floor(v.min/60):''}" placeholder="0"><span>小時</span><input id="${pref}${k}m" type="number" inputmode="numeric" min="0" max="59" value="${v.min!=null?v.min%60:''}" placeholder="30"><span>分</span></div>
+ <div class="cmp" id="${pref}${k}cmp"></div></div>`}).join('')}
+function bindSeg(root){root.querySelectorAll('.seg').forEach(s=>s.querySelectorAll('button').forEach(b=>b.onclick=()=>{s.querySelectorAll('button').forEach(x=>x.classList.toggle('sel',x==b));root.dispatchEvent(new Event('input'))}))}
+function readForm(pref,type){const out={};for(const [k,lab,isT] of ITEMS[type]){
+  const o={};if(isT){const s=document.querySelector(`[data-f="${pref}${k}mode"] .sel`);if(!s)return [null,`請選擇「${lab}」的交通方式`];o.mode=s.dataset.v}
+  const a=$(pref+k+'amt').value,h=$(pref+k+'h').value,m=$(pref+k+'m').value;
+  if(a===''||+a<0)return [null,`請輸入「${lab}」的消費`];if(h===''&&m==='')return [null,`請輸入「${lab}」所花時間`];
+  if(+m>59||+m<0||+h<0)return [null,`「${lab}」的分鐘請輸入 0–59`];o.amt=+a;o.min=(+h||0)*60+(+m||0);out[k]=o}return [out,null]}
+
+// ---------- 設定 ----------
+let setType='work',draft={work:null,off:null};
+function showSetup(){$('main').classList.add('hide');$('setup').classList.remove('hide');
+ if(S.profile){$('pName').value=S.profile.name;$('pAge').value=S.profile.age}
+ draft={work:S.base?.work||null,off:S.base?.off||null};renderSet()}
+function renderSet(){$('setTabs').querySelectorAll('button').forEach(b=>b.classList.toggle('sel',b.dataset.t==setType));
+ $('setForm').innerHTML=formHTML('s',setType,draft[setType]);bindSeg($('setForm'));$('setErr').textContent=''}
+$('setTabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{const [v]=readForm('s',setType);if(v)draft[setType]=v;setType=b.dataset.t;renderSet()});
+$('setSave').onclick=()=>{const n=$('pName').value.trim(),a=$('pAge').value;
+ if(!n)return $('setErr').textContent='請輸入姓名';if(!a||+a<1)return $('setErr').textContent='請輸入年齡';
+ const [v,e]=readForm('s',setType);if(e)return $('setErr').textContent=`${setType=='work'?'上班日':'下班日'}：${e}`;draft[setType]=v;
+ for(const t of ['work','off'])if(!draft[t]){setType=t;renderSet();return $('setErr').textContent=`請也填好「${t=='work'?'上班日':'下班日'}」的所有項目`}
+ S.profile={name:n,age:+a};S.base={work:draft.work,off:draft.off};persist();showMain()};
+
+// ---------- 月曆 ----------
+let cur=new Date();cur.setDate(1);let selKey=null,dayType='work';
+const key=(y,m,d)=>`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+const defType=k=>{const d=new Date(k+'T00:00');return (d.getDay()==0||d.getDay()==6)?'off':'work'};
+function diff(rec){const b=S.base[rec.type];let dm=0,dt=0;for(const [k] of ITEMS[rec.type]){dm+=rec.items[k].amt-b[k].amt;dt+=b[k].min-rec.items[k].min}return {dm,dt}}
+function showMain(){$('setup').classList.add('hide');$('main').classList.remove('hide');$('hello').textContent=`你好，${S.profile.name}`;render()}
+function render(){const y=cur.getFullYear(),m=cur.getMonth();$('title').textContent=`${y}年${m+1}月`;
+ const g=$('grid');g.innerHTML='';'日一二三四五六'.split('').forEach(d=>g.innerHTML+=`<div class="dow">${d}</div>`);
+ const first=new Date(y,m,1).getDay(),days=new Date(y,m+1,0).getDate(),t=new Date();let TM=0,TT=0;
+ for(let i=0;i<first;i++)g.innerHTML+='<div class="day empty"></div>';
+ for(let d=1;d<=days;d++){const k=key(y,m,d),r=S.days[k],tp=r?r.type:defType(k);let inner='';
+  if(r){const {dm,dt}=diff(r);TM+=dm;TT+=dt;inner=`<div class="v ${dt>=0?'pos':'neg'}">⏱${fm(dt)}</div><div class="v ${dm>0?'neg':'pos'}">${money(dm)}</div>`}
+  const b=document.createElement('button');b.className='day'+(tp=='off'?' off':'')+(t.getFullYear()==y&&t.getMonth()==m&&t.getDate()==d?' today':'');
+  b.innerHTML=`<div class="n">${d}</div>${inner}`;b.onclick=()=>openDay(k,`${m+1}月${d}日`);g.appendChild(b)}
+ $('sMoney').textContent=money(TM);$('sMoney').className=TM>0?'neg':'pos';$('sTime').textContent=fm(TT);$('sTime').className=TT>=0?'pos':'neg';
+ $('sRate').textContent=TT>0&&TM>0?money(TM/(TT/60)):'–'}
+function openDay(k,label){selKey=k;const r=S.days[k];dayType=r?r.type:defType(k);$('mTitle').textContent=label;renderDay();$('modal').classList.add('on')}
+function renderDay(){const r=S.days[selKey];$('dayTabs').querySelectorAll('button').forEach(b=>b.classList.toggle('sel',b.dataset.t==dayType));
+ const vals=(r&&r.type==dayType)?r.items:S.base[dayType];$('dayForm').innerHTML=formHTML('d',dayType,vals);bindSeg($('dayForm'));$('dayErr').textContent='';
+ $('dayClear').classList.toggle('hide',!r);liveCmp()}
+function liveCmp(){const b=S.base[dayType];for(const [k] of ITEMS[dayType]){const a=$('d'+k+'amt').value,h=$('d'+k+'h').value,m=$('d'+k+'m').value;if(a===''&&h===''&&m==='')continue;
+  const dm=(+a||0)-b[k].amt,dt=b[k].min-((+h||0)*60+(+m||0));
+  $('d'+k+'cmp').innerHTML=`平時 ${money(b[k].amt)}、${fm(b[k].min)}${b[k].mode?'（'+b[k].mode+'）':''}　→　<span class="${dm>0?'neg':'pos'}">${dm>0?'多花':'少花'} ${money(Math.abs(dm))}</span>，<span class="${dt>=0?'pos':'neg'}">${dt>=0?'省下':'多用'} ${fm(Math.abs(dt))}</span>`}}
+$('dayForm').addEventListener('input',liveCmp);
+$('dayTabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{dayType=b.dataset.t;renderDay()});
+$('daySave').onclick=()=>{const [v,e]=readForm('d',dayType);if(e)return $('dayErr').textContent=e;S.days[selKey]={type:dayType,items:v};persist();$('modal').classList.remove('on');render()};
+$('dayClear').onclick=()=>{if(confirm('確定清除這天的紀錄？')){delete S.days[selKey];persist();$('modal').classList.remove('on');render()}};
+$('close').onclick=()=>$('modal').classList.remove('on');$('modal').onclick=e=>{if(e.target.id=='modal')$('modal').classList.remove('on')};
+$('prev').onclick=()=>{cur.setMonth(cur.getMonth()-1);render()};$('next').onclick=()=>{cur.setMonth(cur.getMonth()+1);render()};
+$('editSet').onclick=showSetup;
+(S.profile&&S.base)?showMain():showSetup();
+</script></body></html>
