@@ -17,7 +17,7 @@ input{width:100%;padding:12px;border:1px solid #ddd;border-radius:10px;font-size
 .time{display:flex;gap:6px;align-items:center}.time input{text-align:center}.time span{color:var(--mute);font-size:13px;white-space:nowrap}
 .tabs{display:flex;background:#e9e8e4;border-radius:12px;padding:4px;margin-bottom:12px}.tabs button{flex:1;border:none;background:none;padding:10px;border-radius:9px}
 .tabs button.sel{background:#fff;box-shadow:0 1px 3px #0002;font-weight:600}
-.opt{display:flex;gap:8px;margin-top:10px}.opt button{flex:1;padding:12px 8px;border-radius:10px;border:2px solid #ddd;background:#fff;font-size:14px;line-height:1.3}
+.opt{display:flex;gap:8px;margin-top:10px}.opt button{flex:1;min-width:0;padding:12px 6px;border-radius:10px;border:2px solid #ddd;background:#fff;font-size:14px;line-height:1.3}
 .opt button.sel{border-color:var(--acc);background:#eef2ff}.opt small{display:block;color:var(--mute);font-size:11px}
 .primary{width:100%;padding:15px;border:none;border-radius:12px;background:var(--acc);color:#fff;font-size:16px;margin-top:4px}
 .ghost{border:none;background:var(--card);border-radius:10px;padding:8px 12px;box-shadow:0 1px 3px #0001;font-size:14px}
@@ -48,7 +48,7 @@ select{width:100%;margin-top:8px;padding:12px;border:1px solid #ddd;border-radiu
 
 <div id="setup" class="wrap hide">
  <h1>先設定你平時的做法</h1>
- <p class="sub">這裡填你平時「便宜但費時」的做法：搭公共交通（可以分幾程填）、自己煮晚餐。之後每天改用 Uber 或外賣時，app 會算出你多花了多少錢、換回多少時間。</p>
+ <p class="sub">這裡填你平時「便宜但費時」的做法：搭公共交通（可以分幾程填）、自己煮晚餐。之後每天改用 Uber、自駕或外賣時，app 會算出你多花了多少錢、換回多少時間。</p>
  <div class="card"><h2>個人資料</h2>
   <div class="row2"><div><label>姓名</label><input id="pName" placeholder="你的名字"></div><div style="flex:.6"><label>年齡</label><input id="pAge" type="number" inputmode="numeric" min="1" placeholder="30"></div></div>
  </div>
@@ -145,14 +145,14 @@ $('setSave').onclick=()=>{const n=$('pName').value.trim(),a=$('pAge').value;
 let cur=new Date();cur.setDate(1);let selKey=null,dayType='work',dayDraft={};
 const key=(y,m,d)=>`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
 const defType=k=>{const d=new Date(k+'T00:00').getDay();return d==0||d==6?'off':'work'};
-function calc(rec){const b=S.base[rec.type];let dm=0,dt=0,g={通勤:{dm:0,dt:0,n:0},晚餐:{dm:0,dt:0,n:0}};
+function calc(rec){const b=S.base[rec.type];let dm=0,dt=0,g={'計程車/Uber':{dm:0,dt:0,n:0},自駕:{dm:0,dt:0,n:0},晚餐:{dm:0,dt:0,n:0}};
  for(const it of ITEMS){const r=rec.items[it.k];if(!r)continue;
-  if(it.commute){(r.legs||[]).forEach((l,i)=>{const bl=b[it.k].legs[i];if(l&&l.fast&&bl){const m=l.amt-bl.amt,t=bl.min-l.min;dm+=m;dt+=t;g.通勤.dm+=m;g.通勤.dt+=t;g.通勤.n++}})}
+  if(it.commute){(r.legs||[]).forEach((l,i)=>{const bl=b[it.k].legs[i];if(l&&l.fast&&bl){const m=l.amt-bl.amt,t=bl.min-l.min,n=l.how=='drive'?'自駕':'計程車/Uber';dm+=m;dt+=t;g[n].dm+=m;g[n].dt+=t;g[n].n++}})}
   else if(r.fast){const m=r.amt-b[it.k].amt,t=b[it.k].min-r.min;dm+=m;dt+=t;g.晚餐.dm+=m;g.晚餐.dt+=t;g.晚餐.n++}}return {dm,dt,g}}
 function showMain(){$('setup').classList.add('hide');$('main').classList.remove('hide');$('hello').textContent=`你好，${S.profile.name}`;render()}
 function render(){const y=cur.getFullYear(),m=cur.getMonth();$('title').textContent=`${y}年${m+1}月`;
  const gr=$('grid');gr.innerHTML='';'日一二三四五六'.split('').forEach(d=>gr.innerHTML+=`<div class="dow">${d}</div>`);
- const first=new Date(y,m,1).getDay(),days=new Date(y,m+1,0).getDate(),t=new Date();let TM=0,TT=0,G={通勤:{dm:0,dt:0,n:0},晚餐:{dm:0,dt:0,n:0}};
+ const first=new Date(y,m,1).getDay(),days=new Date(y,m+1,0).getDate(),t=new Date();let TM=0,TT=0,G={'計程車/Uber':{dm:0,dt:0,n:0},自駕:{dm:0,dt:0,n:0},晚餐:{dm:0,dt:0,n:0}};
  for(let i=0;i<first;i++)gr.innerHTML+='<div class="day empty"></div>';
  for(let d=1;d<=days;d++){const k=key(y,m,d),r=S.days[k],tp=r?r.type:defType(k);let inner='';
   if(r){const c=calc(r);TM+=c.dm;TT+=c.dt;for(const n in c.g){G[n].dm+=c.g[n].dm;G[n].dt+=c.g[n].dt;G[n].n+=c.g[n].n}
@@ -161,25 +161,26 @@ function render(){const y=cur.getFullYear(),m=cur.getMonth();$('title').textCont
   b.innerHTML=`<div class="n">${d}</div>${inner}`;b.onclick=()=>openDay(k,`${m+1}月${d}日（${'日一二三四五六'[new Date(y,m,d).getDay()]}）`);gr.appendChild(b)}
  $('sMoney').textContent=money(TM);$('sTime').textContent=hm(TT);$('sTime').className=TT>=0?'pos':'neg';
  $('sRate').textContent=TT>0?money(TM/(TT/60))+' / 小時':'–';
- $('brk').innerHTML=['通勤','晚餐'].filter(n=>G[n].n).map(n=>`${n}：${G[n].n} ${n=='通勤'?'程':'次'}改用省時做法，多花 ${money(G[n].dm)}，換回 ${hm(G[n].dt)}${G[n].dt>0?`，即每小時 ${money(G[n].dm/(G[n].dt/60))}`:''}`).join('<br>')}
+ $('brk').innerHTML=['計程車/Uber','自駕','晚餐'].filter(n=>G[n].n).map(n=>`${n}：${G[n].n} ${n=='晚餐'?'次':'程'}，多花 ${money(G[n].dm)}，換回 ${hm(G[n].dt)}${G[n].dt>0?`，即每小時 ${money(G[n].dm/(G[n].dt/60))}`:''}`).join('<br>')}
 
 function openDay(k,label){selKey=k;const r=S.days[k];dayType=r?r.type:defType(k);dayDraft=r&&r.type==dayType?JSON.parse(JSON.stringify(r.items)):{};
  $('mTitle').textContent=label;renderDay();$('modal').classList.add('on')}
-const optBtns=(id,fast,slowLab,slowSub,fastLab)=>`<div class="opt" data-id="${id}"><button data-f="0" class="${fast?'':'sel'}">${slowLab}<small>${slowSub}</small></button><button data-f="1" class="${fast?'sel':''}">${fastLab}<small>省時做法</small></button></div>`;
-const fastInputs=(id,v,lab,ph)=>`<div class="${v.fast?'':'hide'}" id="f${id}"><div class="row2"><div><label>${lab}消費（港元）</label><input id="d${id}a" type="number" inputmode="decimal" min="0" step="0.1" value="${v.amt??''}" placeholder="例如 ${ph}"></div>
+const optBtns=(id,v,slowLab,slowSub,fastLab,drive)=>{const m=v.fast?(v.how||'taxi'):'';return `<div class="opt" data-id="${id}"><button data-f="" class="${m?'':'sel'}">${slowLab}<small>${slowSub}</small></button><button data-f="taxi" class="${m=='taxi'?'sel':''}">${fastLab}<small>省時做法</small></button>${drive?`<button data-f="drive" class="${m=='drive'?'sel':''}">自駕<small>停車費</small></button>`:''}</div>`};
+const fastInputs=(id,v,lab,ph)=>`<div class="${v.fast?'':'hide'}" id="f${id}"><div class="row2"><div><label id="l${id}">${v.how=='drive'?'停車費':lab+'消費'}（港元）</label><input id="d${id}a" type="number" inputmode="decimal" min="0" step="0.1" value="${v.amt??''}" placeholder="例如 ${ph}"></div>
  <div style="flex:1.4"><label>所花時間</label>${timeInputs('d'+id+'t',v.min)}</div></div><div class="cmp" id="c${id}">輸入後會顯示和平時的差距</div></div>`;
 function renderDay(){const b=S.base[dayType];$('dayTabs').querySelectorAll('button').forEach(x=>x.classList.toggle('sel',x.dataset.t==dayType));
  $('dayForm').innerHTML=ITEMS.map(it=>{
   if(it.commute){const dl=(dayDraft[it.k]?.legs)||[];const bs=legSum(b[it.k].legs);
-   return `<div class="card"><h2>${it.lab[dayType]}</h2><div class="sub" style="margin:2px 0 0;font-size:12px">平時 ${b[it.k].legs.length} 程合共 ${money(bs.amt)}・${hm(bs.min)}，哪一程改搭計程車或Uber就點哪一程</div>
-   ${b[it.k].legs.map((bl,i)=>{const v=dl[i]||{};return `<div class="leg"><div class="leghd"><b>${legName(i)}</b></div>${optBtns(it.k+i,v.fast,bl.mode,`照平時 ${money(bl.amt)}・${hm(bl.min)}`,'計程車或Uber')}${fastInputs(it.k+i,v,'計程車或Uber','60')}</div>`}).join('')}</div>`}
-  const v=dayDraft[it.k]||{};return `<div class="card"><h2>${it.lab[dayType]}</h2>${optBtns(it.k,v.fast,it.slow,`照平時 ${money(b[it.k].amt)}・${hm(b[it.k].min)}`,it.fast)}${fastInputs(it.k,v,it.fast,'90')}</div>`}).join('');
- $('dayForm').querySelectorAll('.opt').forEach(o=>o.querySelectorAll('button').forEach(btn=>btn.onclick=()=>{const id=o.dataset.id,f=btn.dataset.f=='1';
-  o.querySelectorAll('button').forEach(x=>x.classList.toggle('sel',x==btn));$('f'+id).classList.toggle('hide',!f);setFast(id,f);live()}));
+   return `<div class="card"><h2>${it.lab[dayType]}</h2><div class="sub" style="margin:2px 0 0;font-size:12px">平時 ${b[it.k].legs.length} 程合共 ${money(bs.amt)}・${hm(bs.min)}，哪一程改搭計程車、Uber 或自駕就點哪一程</div>
+   ${b[it.k].legs.map((bl,i)=>{const v=dl[i]||{};return `<div class="leg"><div class="leghd"><b>${legName(i)}</b></div>${optBtns(it.k+i,v,bl.mode,`照平時 ${money(bl.amt)}・${hm(bl.min)}`,'計程車或Uber',1)}${fastInputs(it.k+i,v,'計程車或Uber','60')}</div>`}).join('')}</div>`}
+  const v=dayDraft[it.k]||{};return `<div class="card"><h2>${it.lab[dayType]}</h2>${optBtns(it.k,v,it.slow,`照平時 ${money(b[it.k].amt)}・${hm(b[it.k].min)}`,it.fast,0)}${fastInputs(it.k,v,it.fast,'90')}</div>`}).join('');
+ $('dayForm').querySelectorAll('.opt').forEach(o=>o.querySelectorAll('button').forEach(btn=>btn.onclick=()=>{const id=o.dataset.id,how=btn.dataset.f,f=!!how;
+  o.querySelectorAll('button').forEach(x=>x.classList.toggle('sel',x==btn));$('f'+id).classList.toggle('hide',!f);setFast(id,f,how);
+  if(f&&$('l'+id))$('l'+id).textContent=how=='drive'?'停車費（港元）':(ITEMS.find(x=>id.startsWith(x.k)).commute?'計程車或Uber':ITEMS.find(x=>id.startsWith(x.k)).fast)+'消費（港元）';live()}));
  $('dayErr').textContent='';$('dayClear').classList.toggle('hide',!S.days[selKey]);live()}
-function setFast(id,f){const it=ITEMS.find(x=>id.startsWith(x.k));if(it.commute){const i=+id.slice(it.k.length);dayDraft[it.k]=dayDraft[it.k]||{legs:[]};dayDraft[it.k].legs=dayDraft[it.k].legs||[];dayDraft[it.k].legs[i]=Object.assign(dayDraft[it.k].legs[i]||{},{fast:f})}
- else dayDraft[it.k]=Object.assign(dayDraft[it.k]||{},{fast:f})}
-function units(){const b=S.base[dayType],u=[];for(const it of ITEMS){if(it.commute)b[it.k].legs.forEach((bl,i)=>u.push({id:it.k+i,base:bl,slow:bl.mode,fast:dayDraft[it.k]?.legs?.[i]?.fast,lab:`${it.lab[dayType]}${legName(i)}`}));
+function setFast(id,f,how){const it=ITEMS.find(x=>id.startsWith(x.k));const p={fast:f,how:f?how:undefined};if(it.commute){const i=+id.slice(it.k.length);dayDraft[it.k]=dayDraft[it.k]||{legs:[]};dayDraft[it.k].legs=dayDraft[it.k].legs||[];dayDraft[it.k].legs[i]=Object.assign(dayDraft[it.k].legs[i]||{},p)}
+ else dayDraft[it.k]=Object.assign(dayDraft[it.k]||{},p)}
+function units(){const b=S.base[dayType],u=[];for(const it of ITEMS){if(it.commute)b[it.k].legs.forEach((bl,i)=>u.push({id:it.k+i,base:bl,slow:bl.mode,fast:dayDraft[it.k]?.legs?.[i]?.fast,how:dayDraft[it.k]?.legs?.[i]?.how,lab:`${it.lab[dayType]}${legName(i)}`}));
  else u.push({id:it.k,base:b[it.k],slow:it.slow,fast:dayDraft[it.k]?.fast,lab:it.lab[dayType]})}return u}
 function live(){let DM=0,DT=0,any=false;for(const u of units()){if(!u.fast)continue;const a=readAmt('d'+u.id+'a'),t=readTime('d'+u.id+'t');
   if(a==null||t==null||isNaN(t)){$('c'+u.id).textContent='輸入後會顯示和平時的差距';continue}
@@ -191,8 +192,8 @@ $('dayTabs').querySelectorAll('button').forEach(x=>x.onclick=()=>{dayType=x.data
 $('daySave').onclick=()=>{const b=S.base[dayType],items={};
  for(const it of ITEMS){if(it.commute)items[it.k]={legs:b[it.k].legs.map(()=>({fast:false}))};else items[it.k]={fast:false}}
  for(const u of units()){if(!u.fast)continue;const a=readAmt('d'+u.id+'a'),t=readTime('d'+u.id+'t');
-  if(a==null)return $('dayErr').textContent=`請輸入「${u.lab}」的消費`;if(t==null)return $('dayErr').textContent=`請輸入「${u.lab}」所花時間`;if(isNaN(t))return $('dayErr').textContent=`「${u.lab}」的分鐘請輸入 0–59`;
-  const it=ITEMS.find(x=>u.id.startsWith(x.k));const rec={fast:true,amt:a,min:t};if(it.commute)items[it.k].legs[+u.id.slice(it.k.length)]=rec;else items[it.k]=rec}
+  if(a==null)return $('dayErr').textContent=`請輸入「${u.lab}」的${u.how=='drive'?'停車費（沒有就填 0）':'消費'}`;if(t==null)return $('dayErr').textContent=`請輸入「${u.lab}」所花時間`;if(isNaN(t))return $('dayErr').textContent=`「${u.lab}」的分鐘請輸入 0–59`;
+  const it=ITEMS.find(x=>u.id.startsWith(x.k));const rec={fast:true,amt:a,min:t};if(it.commute)rec.how=u.how||'taxi';if(it.commute)items[it.k].legs[+u.id.slice(it.k.length)]=rec;else items[it.k]=rec}
  S.days[selKey]={type:dayType,items};persist();$('modal').classList.remove('on');render()};
 $('dayClear').onclick=()=>{if(confirm('確定清除這天的紀錄？')){delete S.days[selKey];persist();$('modal').classList.remove('on');render()}};
 $('close').onclick=()=>$('modal').classList.remove('on');$('modal').onclick=e=>{if(e.target.id=='modal')$('modal').classList.remove('on')};
