@@ -39,11 +39,16 @@ header{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .close{float:right;border:none;background:none;font-size:26px;color:var(--mute);line-height:1}
 .cmp{font-size:13px;margin-top:10px;padding:10px;border-radius:10px;background:#f6f7fb;line-height:1.5}
 .total{font-size:14px;line-height:1.6}
+.leg{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}.leghd{display:flex;align-items:center;gap:8px;font-size:14px}
+.x{margin-left:auto;border:none;background:none;color:var(--r);font-size:13px}.opt-tag{font-size:11px;color:var(--mute)}
+select{width:100%;margin-top:8px;padding:12px;border:1px solid #ddd;border-radius:10px;font-size:16px;background:#fff;-webkit-appearance:none;appearance:none}
+.add{width:100%;margin-top:12px;padding:12px;border:2px dashed #cfd6ee;border-radius:10px;background:#f7f9ff;color:var(--acc);font-size:15px}
+.row2 .time input{padding:12px 6px}
 </style></head><body>
 
 <div id="setup" class="wrap hide">
  <h1>先設定你平時的做法</h1>
- <p class="sub">這裡填你平時「便宜但費時」的做法：搭公共交通、自己煮晚餐。之後每天改用 Uber 或外賣時，app 會算出你多花了多少錢、換回多少時間。</p>
+ <p class="sub">這裡填你平時「便宜但費時」的做法：搭公共交通（可以分幾程填）、自己煮晚餐。之後每天改用 Uber 或外賣時，app 會算出你多花了多少錢、換回多少時間。</p>
  <div class="card"><h2>個人資料</h2>
   <div class="row2"><div><label>姓名</label><input id="pName" placeholder="你的名字"></div><div style="flex:.6"><label>年齡</label><input id="pAge" type="number" inputmode="numeric" min="1" placeholder="30"></div></div>
  </div>
@@ -77,11 +82,15 @@ header{display:flex;align-items:center;justify-content:space-between;gap:8px}
 </div></div>
 
 <script>
-const K='timesaver-v3';let S=JSON.parse(localStorage.getItem(K)||'null')||{profile:null,base:null,days:{}};
+const K='timesaver-v4';
+let S=JSON.parse(localStorage.getItem(K)||'null');
+if(!S){const o=JSON.parse(localStorage.getItem('timesaver-v3')||'null');S={profile:null,base:null,days:{}};
+ if(o&&o.base){S.profile=o.profile;S.base={};for(const t of ['work','off']){const b=o.base[t];S.base[t]={go:{legs:[{mode:'公共交通',amt:b.go.amt,min:b.go.min}]},back:{legs:[{mode:'公共交通',amt:b.back.amt,min:b.back.min}]},dinner:b.dinner}}}}
 const persist=()=>localStorage.setItem(K,JSON.stringify(S));
-const ITEMS=[{k:'go',lab:{work:'上班通勤',off:'出門交通'},slow:'公共交通',fast:'計程車或Uber',grp:'通勤'},
-             {k:'back',lab:{work:'下班通勤',off:'回家交通'},slow:'公共交通',fast:'計程車或Uber',grp:'通勤'},
-             {k:'dinner',lab:{work:'晚餐',off:'晚餐'},slow:'自己煮',fast:'外賣/出外用膳',grp:'晚餐',note:'包括買餸、煮飯、洗碗的時間'}];
+const ITEMS=[{k:'go',lab:{work:'上班通勤',off:'出門交通'},commute:1,grp:'通勤'},{k:'back',lab:{work:'下班通勤',off:'回家交通'},commute:1,grp:'通勤'},
+ {k:'dinner',lab:{work:'晚餐',off:'晚餐'},slow:'自己煮',fast:'外賣/出外用膳',grp:'晚餐',note:'包括買餸、煮飯、洗碗的時間'}];
+const MODES=['港鐵','巴士','小巴','電車','渡輪','步行','其他公共交通'];
+const LEGN=['一','二','三','四','五','六','七','八','九','十'];const legName=i=>`第${LEGN[i]||i+1}程`;
 const $=id=>document.getElementById(id);
 const hm=m=>{m=Math.round(Math.abs(m));const h=Math.floor(m/60),mi=m%60;return h?`${h}小時${mi}分`:`${mi}分`};
 const sh=m=>{m=Math.round(Math.abs(m));return `${Math.floor(m/60)}:${String(m%60).padStart(2,'0')}`};
@@ -89,68 +98,101 @@ const money=v=>'$'+(Math.round(Math.abs(v)*10)/10).toLocaleString();
 const timeInputs=(id,min)=>`<div class="time"><input id="${id}h" type="number" inputmode="numeric" min="0" value="${min!=null?Math.floor(min/60):''}" placeholder="0"><span>小時</span><input id="${id}m" type="number" inputmode="numeric" min="0" max="59" value="${min!=null?min%60:''}" placeholder="0"><span>分</span></div>`;
 const readTime=id=>{const h=$(id+'h').value,m=$(id+'m').value;if(h===''&&m==='')return null;if(+h<0||+m<0||+m>59)return NaN;return (+h||0)*60+(+m||0)};
 const readAmt=id=>{const a=$(id).value;if(a===''||+a<0)return null;return +a};
+const legSum=legs=>legs.reduce((a,l)=>({amt:a.amt+l.amt,min:a.min+l.min}),{amt:0,min:0});
 
 // ---------- 設定 ----------
-let setType='work',draft={work:null,off:null};
-function setHTML(t,vals){return ITEMS.map(it=>{const v=(vals&&vals[it.k])||{};return `<div class="card"><h2>${it.lab[t]}<span class="tag">${it.slow}</span></h2>
- ${it.note?`<div class="sub" style="margin:4px 0 0;font-size:12px">${it.note}</div>`:''}
- <div class="row2"><div><label>消費（港元）</label><input id="s${it.k}a" type="number" inputmode="decimal" min="0" step="0.1" value="${v.amt??''}" placeholder="${it.k=='dinner'?'40':'12'}"></div></div>
+let setType='work',draft={work:null,off:null},legCount={};
+function legHTML(k,i,l){l=l||{};return `<div class="leg" id="L${k}${i}"><div class="leghd"><b>${legName(i)}</b>${i>=3?`<button class="x" data-k="${k}" data-i="${i}">刪除</button>`:''}${i>0&&i<3?'<span class="opt-tag">選填</span>':''}</div>
+ <select id="s${k}${i}mo">${MODES.map(m=>`<option ${l.mode==m?'selected':''}>${m}</option>`).join('')}</select>
+ <div class="row2"><div><label>消費（港元）</label><input id="s${k}${i}a" type="number" inputmode="decimal" min="0" step="0.1" value="${l.amt??''}" placeholder="0"></div>
+ <div style="flex:1.4"><label>所花時間</label>${timeInputs('s'+k+i+'t',l.min)}</div></div></div>`}
+function setHTML(t,vals){return ITEMS.map(it=>{const v=(vals&&vals[it.k])||{};
+ if(it.commute){const legs=v.legs||[];const n=legCount[it.k]=Math.max(3,legs.length);
+  return `<div class="card"><h2>${it.lab[t]}<span class="tag">公共交通</span></h2><div class="sub" style="margin:4px 0 0;font-size:12px">每一程分開填，用不到的程數留空就好</div>
+  <div id="legs${it.k}">${Array.from({length:n},(_,i)=>legHTML(it.k,i,legs[i])).join('')}</div>
+  <button class="add" data-k="${it.k}">＋ 新增一程</button><div class="cmp" id="sum${it.k}"></div></div>`}
+ return `<div class="card"><h2>${it.lab[t]}<span class="tag">${it.slow}</span></h2><div class="sub" style="margin:4px 0 0;font-size:12px">${it.note}</div>
+ <label>消費（港元）</label><input id="s${it.k}a" type="number" inputmode="decimal" min="0" step="0.1" value="${v.amt??''}" placeholder="40">
  <label>所花時間</label>${timeInputs('s'+it.k+'t',v.min)}</div>`}).join('')}
-function readSet(){const o={};for(const it of ITEMS){const a=readAmt('s'+it.k+'a'),t=readTime('s'+it.k+'t'),l=it.lab[setType];
- if(a==null)return [null,`請輸入「${l}」的消費`];if(t==null)return [null,`請輸入「${l}」所花時間`];if(isNaN(t))return [null,`「${l}」的分鐘請輸入 0–59`];o[it.k]={amt:a,min:t}}return [o,null]}
+function readLegs(k,lab,strict){const legs=[];for(let i=0;i<legCount[k];i++){if(!$('s'+k+i+'a'))continue;const a=readAmt('s'+k+i+'a'),t=readTime('s'+k+i+'t');
+  if(a==null&&t==null){if(i==0&&strict)return [null,`請填「${lab}」的第一程`];continue}
+  if(a==null)return [null,`請輸入「${lab}」${legName(i)}的消費（沒有就填 0）`];if(t==null)return [null,`請輸入「${lab}」${legName(i)}所花時間`];if(isNaN(t))return [null,`「${lab}」${legName(i)}的分鐘請輸入 0–59`];
+  legs.push({mode:$('s'+k+i+'mo').value,amt:a,min:t})}if(!legs.length&&strict)return [null,`請填「${lab}」的第一程`];return [legs,null]}
+function readSet(){const o={};for(const it of ITEMS){const l=it.lab[setType];
+ if(it.commute){const [legs,e]=readLegs(it.k,l,true);if(e)return [null,e];o[it.k]={legs};continue}
+ const a=readAmt('s'+it.k+'a'),t=readTime('s'+it.k+'t');if(a==null)return [null,`請輸入「${l}」的消費`];if(t==null)return [null,`請輸入「${l}」所花時間`];if(isNaN(t))return [null,`「${l}」的分鐘請輸入 0–59`];o[it.k]={amt:a,min:t}}return [o,null]}
+function setSums(){for(const it of ITEMS)if(it.commute){const [legs]=readLegs(it.k,'',false);const el=$('sum'+it.k);if(!el)continue;
+ if(legs&&legs.length){const s=legSum(legs);el.textContent=`合共 ${legs.length} 程：${money(s.amt)}，${hm(s.min)}`;el.classList.remove('hide')}else el.classList.add('hide')}}
+function bindSet(){$('setForm').querySelectorAll('.add').forEach(b=>b.onclick=()=>{const k=b.dataset.k,i=legCount[k]++;$('legs'+k).insertAdjacentHTML('beforeend',legHTML(k,i));bindX();$('L'+k+i).scrollIntoView({behavior:'smooth',block:'center'})});bindX();setSums()}
+function bindX(){$('setForm').querySelectorAll('.x').forEach(b=>b.onclick=()=>{$('L'+b.dataset.k+b.dataset.i).remove();relabel(b.dataset.k);setSums()})}
+function relabel(k){const [legs]=readLegs(k,'',false);const all=[];for(let i=0;i<legCount[k];i++){if(!$('s'+k+i+'a'))continue;const a=$('s'+k+i+'a').value,h=$('s'+k+i+'th').value,m=$('s'+k+i+'tm').value;
+  all.push({mode:$('s'+k+i+'mo').value,amt:a===''?undefined:+a,min:(h===''&&m==='')?undefined:(+h||0)*60+(+m||0)})}
+ legCount[k]=Math.max(3,all.length);$('legs'+k).innerHTML=Array.from({length:legCount[k]},(_,i)=>legHTML(k,i,all[i])).join('');bindX()}
+$('setForm').addEventListener('input',setSums);
 function showSetup(){$('main').classList.add('hide');$('setup').classList.remove('hide');window.scrollTo(0,0);
  if(S.profile){$('pName').value=S.profile.name;$('pAge').value=S.profile.age}draft={work:S.base?.work||null,off:S.base?.off||null};renderSet()}
-function renderSet(){$('setTabs').querySelectorAll('button').forEach(b=>b.classList.toggle('sel',b.dataset.t==setType));$('setForm').innerHTML=setHTML(setType,draft[setType]);$('setErr').textContent=''}
+function renderSet(){$('setTabs').querySelectorAll('button').forEach(b=>b.classList.toggle('sel',b.dataset.t==setType));$('setForm').innerHTML=setHTML(setType,draft[setType]);$('setErr').textContent='';bindSet()}
 $('setTabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{const [v]=readSet();if(v)draft[setType]=v;setType=b.dataset.t;renderSet()});
 $('setSave').onclick=()=>{const n=$('pName').value.trim(),a=$('pAge').value;
  if(!n)return $('setErr').textContent='請輸入姓名';if(!a||+a<1)return $('setErr').textContent='請輸入年齡';
  const [v,e]=readSet();if(e)return $('setErr').textContent=(setType=='work'?'上班日：':'下班日：')+e;draft[setType]=v;
  for(const t of ['work','off'])if(!draft[t]){setType=t;renderSet();return $('setErr').textContent=`請也填好「${t=='work'?'上班日':'下班日'}」的所有項目`}
- S.profile={name:n,age:+a};S.base={work:draft.work,off:draft.off};persist();showMain()};
+ S.profile={name:n,age:+a};S.base={work:draft.work,off:draft.off};
+ for(const k in S.days){const r=S.days[k];for(const it of ITEMS)if(it.commute&&r.items[it.k]?.legs)r.items[it.k].legs.length=Math.min(r.items[it.k].legs.length,S.base[r.type][it.k].legs.length)}
+ persist();showMain()};
 
 // ---------- 月曆 ----------
 let cur=new Date();cur.setDate(1);let selKey=null,dayType='work',dayDraft={};
 const key=(y,m,d)=>`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
 const defType=k=>{const d=new Date(k+'T00:00').getDay();return d==0||d==6?'off':'work'};
-function calc(rec){const b=S.base[rec.type];let dm=0,dt=0,g={通勤:{dm:0,dt:0},晚餐:{dm:0,dt:0}};
- for(const it of ITEMS){const r=rec.items[it.k];if(r&&r.fast){const m=r.amt-b[it.k].amt,t=b[it.k].min-r.min;dm+=m;dt+=t;g[it.grp].dm+=m;g[it.grp].dt+=t}}return {dm,dt,g}}
+function calc(rec){const b=S.base[rec.type];let dm=0,dt=0,g={通勤:{dm:0,dt:0,n:0},晚餐:{dm:0,dt:0,n:0}};
+ for(const it of ITEMS){const r=rec.items[it.k];if(!r)continue;
+  if(it.commute){(r.legs||[]).forEach((l,i)=>{const bl=b[it.k].legs[i];if(l&&l.fast&&bl){const m=l.amt-bl.amt,t=bl.min-l.min;dm+=m;dt+=t;g.通勤.dm+=m;g.通勤.dt+=t;g.通勤.n++}})}
+  else if(r.fast){const m=r.amt-b[it.k].amt,t=b[it.k].min-r.min;dm+=m;dt+=t;g.晚餐.dm+=m;g.晚餐.dt+=t;g.晚餐.n++}}return {dm,dt,g}}
 function showMain(){$('setup').classList.add('hide');$('main').classList.remove('hide');$('hello').textContent=`你好，${S.profile.name}`;render()}
 function render(){const y=cur.getFullYear(),m=cur.getMonth();$('title').textContent=`${y}年${m+1}月`;
  const gr=$('grid');gr.innerHTML='';'日一二三四五六'.split('').forEach(d=>gr.innerHTML+=`<div class="dow">${d}</div>`);
  const first=new Date(y,m,1).getDay(),days=new Date(y,m+1,0).getDate(),t=new Date();let TM=0,TT=0,G={通勤:{dm:0,dt:0,n:0},晚餐:{dm:0,dt:0,n:0}};
  for(let i=0;i<first;i++)gr.innerHTML+='<div class="day empty"></div>';
  for(let d=1;d<=days;d++){const k=key(y,m,d),r=S.days[k],tp=r?r.type:defType(k);let inner='';
-  if(r){const c=calc(r);TM+=c.dm;TT+=c.dt;for(const n in c.g){G[n].dm+=c.g[n].dm;G[n].dt+=c.g[n].dt}
-   for(const it of ITEMS)if(r.items[it.k]?.fast)G[it.grp].n++;
-   if(c.dm||c.dt)inner=`<div class="v ${c.dt>=0?'pos':'neg'}">${c.dt>=0?'+':'-'}${sh(c.dt)}</div><div class="v ${c.dm>0?'neg':'pos'}">${c.dm>0?'-':'+'}${money(c.dm)}</div>`;
-   else inner='<div class="v" style="color:#aaa">平時</div>'}
+  if(r){const c=calc(r);TM+=c.dm;TT+=c.dt;for(const n in c.g){G[n].dm+=c.g[n].dm;G[n].dt+=c.g[n].dt;G[n].n+=c.g[n].n}
+   inner=(c.dm||c.dt)?`<div class="v ${c.dt>=0?'pos':'neg'}">${c.dt>=0?'+':'-'}${sh(c.dt)}</div><div class="v ${c.dm>0?'neg':'pos'}">${c.dm>0?'-':'+'}${money(c.dm)}</div>`:'<div class="v" style="color:#aaa">平時</div>'}
   const b=document.createElement('button');b.className='day'+(tp=='off'?' off':'')+(t.getFullYear()==y&&t.getMonth()==m&&t.getDate()==d?' today':'');
   b.innerHTML=`<div class="n">${d}</div>${inner}`;b.onclick=()=>openDay(k,`${m+1}月${d}日（${'日一二三四五六'[new Date(y,m,d).getDay()]}）`);gr.appendChild(b)}
  $('sMoney').textContent=money(TM);$('sTime').textContent=hm(TT);$('sTime').className=TT>=0?'pos':'neg';
  $('sRate').textContent=TT>0?money(TM/(TT/60))+' / 小時':'–';
- $('brk').innerHTML=['通勤','晚餐'].filter(n=>G[n].n).map(n=>`${n}：${G[n].n} 次，多花 ${money(G[n].dm)}，換回 ${hm(G[n].dt)}${G[n].dt>0?`，即每小時 ${money(G[n].dm/(G[n].dt/60))}`:''}`).join('<br>')}
+ $('brk').innerHTML=['通勤','晚餐'].filter(n=>G[n].n).map(n=>`${n}：${G[n].n} ${n=='通勤'?'程':'次'}改用省時做法，多花 ${money(G[n].dm)}，換回 ${hm(G[n].dt)}${G[n].dt>0?`，即每小時 ${money(G[n].dm/(G[n].dt/60))}`:''}`).join('<br>')}
 
 function openDay(k,label){selKey=k;const r=S.days[k];dayType=r?r.type:defType(k);dayDraft=r&&r.type==dayType?JSON.parse(JSON.stringify(r.items)):{};
  $('mTitle').textContent=label;renderDay();$('modal').classList.add('on')}
+const optBtns=(id,fast,slowLab,slowSub,fastLab)=>`<div class="opt" data-id="${id}"><button data-f="0" class="${fast?'':'sel'}">${slowLab}<small>${slowSub}</small></button><button data-f="1" class="${fast?'sel':''}">${fastLab}<small>省時做法</small></button></div>`;
+const fastInputs=(id,v,lab,ph)=>`<div class="${v.fast?'':'hide'}" id="f${id}"><div class="row2"><div><label>${lab}消費（港元）</label><input id="d${id}a" type="number" inputmode="decimal" min="0" step="0.1" value="${v.amt??''}" placeholder="例如 ${ph}"></div>
+ <div style="flex:1.4"><label>所花時間</label>${timeInputs('d'+id+'t',v.min)}</div></div><div class="cmp" id="c${id}">輸入後會顯示和平時的差距</div></div>`;
 function renderDay(){const b=S.base[dayType];$('dayTabs').querySelectorAll('button').forEach(x=>x.classList.toggle('sel',x.dataset.t==dayType));
- $('dayForm').innerHTML=ITEMS.map(it=>{const v=dayDraft[it.k]||{},fast=!!v.fast;return `<div class="card"><h2>${it.lab[dayType]}</h2>
-  <div class="opt" data-k="${it.k}"><button data-f="0" class="${fast?'':'sel'}">${it.slow}<small>照平時 ${money(b[it.k].amt)}・${hm(b[it.k].min)}</small></button><button data-f="1" class="${fast?'sel':''}">${it.fast}<small>省時做法</small></button></div>
-  <div class="${fast?'':'hide'}" id="f${it.k}"><div class="row2"><div><label>${it.fast}消費（港元）</label><input id="d${it.k}a" type="number" inputmode="decimal" min="0" step="0.1" value="${v.amt??''}" placeholder="例如 ${it.k=='dinner'?'90':'80'}"></div></div>
-  <label>所花時間</label>${timeInputs('d'+it.k+'t',v.min)}<div class="cmp" id="c${it.k}">輸入後會顯示和平時的差距</div></div></div>`}).join('');
- $('dayForm').querySelectorAll('.opt').forEach(o=>o.querySelectorAll('button').forEach(btn=>btn.onclick=()=>{const k=o.dataset.k,f=btn.dataset.f=='1';
-  o.querySelectorAll('button').forEach(x=>x.classList.toggle('sel',x==btn));$('f'+k).classList.toggle('hide',!f);dayDraft[k]=Object.assign(dayDraft[k]||{},{fast:f});live()}));
+ $('dayForm').innerHTML=ITEMS.map(it=>{
+  if(it.commute){const dl=(dayDraft[it.k]?.legs)||[];const bs=legSum(b[it.k].legs);
+   return `<div class="card"><h2>${it.lab[dayType]}</h2><div class="sub" style="margin:2px 0 0;font-size:12px">平時 ${b[it.k].legs.length} 程合共 ${money(bs.amt)}・${hm(bs.min)}，哪一程改搭計程車或Uber就點哪一程</div>
+   ${b[it.k].legs.map((bl,i)=>{const v=dl[i]||{};return `<div class="leg"><div class="leghd"><b>${legName(i)}</b></div>${optBtns(it.k+i,v.fast,bl.mode,`照平時 ${money(bl.amt)}・${hm(bl.min)}`,'計程車或Uber')}${fastInputs(it.k+i,v,'計程車或Uber','60')}</div>`}).join('')}</div>`}
+  const v=dayDraft[it.k]||{};return `<div class="card"><h2>${it.lab[dayType]}</h2>${optBtns(it.k,v.fast,it.slow,`照平時 ${money(b[it.k].amt)}・${hm(b[it.k].min)}`,it.fast)}${fastInputs(it.k,v,it.fast,'90')}</div>`}).join('');
+ $('dayForm').querySelectorAll('.opt').forEach(o=>o.querySelectorAll('button').forEach(btn=>btn.onclick=()=>{const id=o.dataset.id,f=btn.dataset.f=='1';
+  o.querySelectorAll('button').forEach(x=>x.classList.toggle('sel',x==btn));$('f'+id).classList.toggle('hide',!f);setFast(id,f);live()}));
  $('dayErr').textContent='';$('dayClear').classList.toggle('hide',!S.days[selKey]);live()}
-function live(){const b=S.base[dayType];let DM=0,DT=0,any=false;
- for(const it of ITEMS){if(!dayDraft[it.k]?.fast)continue;const a=readAmt('d'+it.k+'a'),t=readTime('d'+it.k+'t');
-  if(a==null||t==null||isNaN(t)){$('c'+it.k).textContent='輸入後會顯示和平時的差距';continue}
-  const dm=a-b[it.k].amt,dt=b[it.k].min-t;DM+=dm;DT+=dt;any=true;
-  $('c'+it.k).innerHTML=`比${it.slow}<span class="${dm>0?'neg':'pos'}">${dm>0?'多花':'少花'} ${money(dm)}</span>，<span class="${dt>=0?'pos':'neg'}">${dt>=0?'省下':'多用'} ${hm(dt)}</span>${dt>0&&dm>0?`<br>等於每小時付 <b>${money(dm/(dt/60))}</b> 換時間`:''}`}
+function setFast(id,f){const it=ITEMS.find(x=>id.startsWith(x.k));if(it.commute){const i=+id.slice(it.k.length);dayDraft[it.k]=dayDraft[it.k]||{legs:[]};dayDraft[it.k].legs=dayDraft[it.k].legs||[];dayDraft[it.k].legs[i]=Object.assign(dayDraft[it.k].legs[i]||{},{fast:f})}
+ else dayDraft[it.k]=Object.assign(dayDraft[it.k]||{},{fast:f})}
+function units(){const b=S.base[dayType],u=[];for(const it of ITEMS){if(it.commute)b[it.k].legs.forEach((bl,i)=>u.push({id:it.k+i,base:bl,slow:bl.mode,fast:dayDraft[it.k]?.legs?.[i]?.fast,lab:`${it.lab[dayType]}${legName(i)}`}));
+ else u.push({id:it.k,base:b[it.k],slow:it.slow,fast:dayDraft[it.k]?.fast,lab:it.lab[dayType]})}return u}
+function live(){let DM=0,DT=0,any=false;for(const u of units()){if(!u.fast)continue;const a=readAmt('d'+u.id+'a'),t=readTime('d'+u.id+'t');
+  if(a==null||t==null||isNaN(t)){$('c'+u.id).textContent='輸入後會顯示和平時的差距';continue}
+  const dm=a-u.base.amt,dt=u.base.min-t;DM+=dm;DT+=dt;any=true;
+  $('c'+u.id).innerHTML=`比${u.slow}<span class="${dm>0?'neg':'pos'}">${dm>0?'多花':'少花'} ${money(dm)}</span>，<span class="${dt>=0?'pos':'neg'}">${dt>=0?'省下':'多用'} ${hm(dt)}</span>${dt>0&&dm>0?`<br>等於每小時付 <b>${money(dm/(dt/60))}</b> 換時間`:''}`}
  $('dayTotal').innerHTML=any?`這天合共：<span class="${DM>0?'neg':'pos'}">${DM>0?'多花':'少花'} ${money(DM)}</span>，<span class="${DT>=0?'pos':'neg'}">${DT>=0?'換回':'多用'} ${hm(DT)}</span>${DT>0&&DM>0?`<br>平均每小時 ${money(DM/(DT/60))}`:''}`:'這天全部照平時做法，沒有多花錢，也沒有省時間。'}
 $('dayForm').addEventListener('input',live);
 $('dayTabs').querySelectorAll('button').forEach(x=>x.onclick=()=>{dayType=x.dataset.t;dayDraft={};renderDay()});
-$('daySave').onclick=()=>{const items={};for(const it of ITEMS){const l=it.lab[dayType];if(!dayDraft[it.k]?.fast){items[it.k]={fast:false};continue}
-  const a=readAmt('d'+it.k+'a'),t=readTime('d'+it.k+'t');if(a==null)return $('dayErr').textContent=`請輸入「${l}」${it.fast}的消費`;
-  if(t==null)return $('dayErr').textContent=`請輸入「${l}」所花時間`;if(isNaN(t))return $('dayErr').textContent=`「${l}」的分鐘請輸入 0–59`;items[it.k]={fast:true,amt:a,min:t}}
+$('daySave').onclick=()=>{const b=S.base[dayType],items={};
+ for(const it of ITEMS){if(it.commute)items[it.k]={legs:b[it.k].legs.map(()=>({fast:false}))};else items[it.k]={fast:false}}
+ for(const u of units()){if(!u.fast)continue;const a=readAmt('d'+u.id+'a'),t=readTime('d'+u.id+'t');
+  if(a==null)return $('dayErr').textContent=`請輸入「${u.lab}」的消費`;if(t==null)return $('dayErr').textContent=`請輸入「${u.lab}」所花時間`;if(isNaN(t))return $('dayErr').textContent=`「${u.lab}」的分鐘請輸入 0–59`;
+  const it=ITEMS.find(x=>u.id.startsWith(x.k));const rec={fast:true,amt:a,min:t};if(it.commute)items[it.k].legs[+u.id.slice(it.k.length)]=rec;else items[it.k]=rec}
  S.days[selKey]={type:dayType,items};persist();$('modal').classList.remove('on');render()};
 $('dayClear').onclick=()=>{if(confirm('確定清除這天的紀錄？')){delete S.days[selKey];persist();$('modal').classList.remove('on');render()}};
 $('close').onclick=()=>$('modal').classList.remove('on');$('modal').onclick=e=>{if(e.target.id=='modal')$('modal').classList.remove('on')};
